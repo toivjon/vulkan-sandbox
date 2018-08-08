@@ -1,11 +1,11 @@
 # the compiler to use.
-CC = g++
+CC = clang
 
 # compiler compilation options.
-CFLAGS = -std=c++11 -Wall -Wextra
+CFLAGS = -std=c++11 -Wall -Wextra -IC:\VulkanSDK\1.1.82.0\Include
 
 # libraries to link against.
-LFLAGS =
+LFLAGS = -LC:\VulkanSDK\1.1.82.0\Lib -lvulkan-1
 
 # the path to object files and executable.
 BUILD_PATH = build
