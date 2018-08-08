@@ -25,4 +25,4 @@ $(BUILD_PATH)/%.o: $(SRC_PATH)/%.cpp
 
 # rule to compile the executable.
 all: $(OBJ)
-	$(CC) -o $(BUILD_PATH)/pong.exe $(OBJ) $(CFLAGS) $(LFLAGS)
+	$(CC) -o $(BUILD_PATH)/test.exe $(OBJ) $(CFLAGS) $(LFLAGS)
