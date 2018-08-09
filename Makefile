@@ -1,5 +1,5 @@
 # the compiler to use.
-CC = clang
+CC = g++
 
 # compiler compilation options.
 CFLAGS = -std=c++11 -Wall -Wextra -IC:\VulkanSDK\1.1.82.0\Include

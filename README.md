@@ -9,4 +9,6 @@ Download Vulkan API from the LunarG website [here](https://vulkan.lunarg.com/sdk
 Check that the CFLAGS and LFLAGS in the Makefile point to the correct directory.
 
 ## Compiler
-Older older compilers may not recognize and link with Vulkan libraries correctly. At least the g++ (5.3.0) delivered with the latest MinGW package issued some linkage problems when I started with this project. Therefore Makefile uses Clang as the default compiler, where at least 6.0.1 version seems to work at the moment.
+Some older or 32-bit compilers may not recognize and link with Vulkan libraries correctly.
+
+At least g++ (ver. 8.1.0) delivered along with the MinGW-w64 seems to work at the moment.
