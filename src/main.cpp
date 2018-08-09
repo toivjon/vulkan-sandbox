@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 
 #include <vulkan/vulkan.h>
 
@@ -7,6 +8,33 @@
 
 // The main handle which is used to store all per-application state values.
 static VkInstance sInstance = NULL;
+
+// ============================================================================
+// Get the result description for the specified Vulkan result code.
+// @param result The target Vulkan result code.
+// @returns A result description as a string.
+static std::string vulkan_result_description(VkResult result)
+{
+  switch (result)
+  {
+    case VK_SUCCESS:
+      return "Command successfully completed.";
+    case VK_ERROR_OUT_OF_HOST_MEMORY:
+      return "A host memory allocation has failed.";
+    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+      return "A device memory allocation has failed.";
+    case VK_ERROR_INITIALIZATION_FAILED:
+      return "Initialization of an object could not be completed.";
+    case VK_ERROR_LAYER_NOT_PRESENT:
+      return "A requested layer is not present or could not be loaded.";
+    case VK_ERROR_EXTENSION_NOT_PRESENT:
+      return "A requested extension is not supported.";
+    case VK_ERROR_INCOMPATIBLE_DRIVER:
+      return "The requested version of Vulkan is not supported by the driver.";
+    default:
+      return "An unknown result code [" + std::to_string(result) + "] occured.";
+  }
+}
 
 // ============================================================================
 
@@ -85,31 +113,9 @@ static void init_vulkan()
   // 3. pInstance must be a pointer to a VkInstance handle.
   // ==========================================================================
   VkResult result = vkCreateInstance(&instanceInfo, NULL, &sInstance);
-  switch (result) {
-    case VK_SUCCESS:
-      printf("vkCreateInstance succeeded.\n");
-      break;
-    case VK_ERROR_OUT_OF_HOST_MEMORY:
-      printf("vkCreateInstance failed: Host machine is out of memory.\n");
-      break;
-    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
-      printf("vkCreateInstance failed: Device is out of memory.\n");
-      break;
-    case VK_ERROR_INITIALIZATION_FAILED:
-      printf("vkCreateInstance failed: Vulkan initialization failed.\n");
-      break;
-    case VK_ERROR_LAYER_NOT_PRESENT:
-      printf("vkCreateInstance failed: The requested layer is not present.\n");
-      break;
-    case VK_ERROR_EXTENSION_NOT_PRESENT:
-      printf("vkCreateInstance failed: The requested extension is not present.\n");
-      break;
-    case VK_ERROR_INCOMPATIBLE_DRIVER:
-      printf("vkCreateInstance failed: The graphics driver is incompatible.\n");
-      break;
-    default:
-      printf("vkCreateInstance failed: An unknown error code [%d].\n", result);
-      break;
+  printf("vkCreateInstance: %s\n", vulkan_result_description(result).c_str());
+  if (result != VK_SUCCESS) {
+    exit(EXIT_FAILURE);
   }
 }
 
