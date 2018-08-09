@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
+#include <vector>
 
 #include <vulkan/vulkan.h>
 
@@ -19,6 +20,8 @@ static std::string vulkan_result_description(VkResult result)
   {
     case VK_SUCCESS:
       return "Command successfully completed.";
+    case VK_INCOMPLETE:
+      return "A return array was too small for the result.";
     case VK_ERROR_OUT_OF_HOST_MEMORY:
       return "A host memory allocation has failed.";
     case VK_ERROR_OUT_OF_DEVICE_MEMORY:
@@ -40,6 +43,49 @@ static std::string vulkan_result_description(VkResult result)
 
 static void init_vulkan()
 {
+  // ==========================================================================
+  // vkEnumerateInstanceExtensionProperties - Enumerate Vulkan extensions.
+  // This is optional, but can be useful to detect available extensions.
+  //
+  // This feature is actually divided into two sections, where we must first
+  // calculate the amount of extensions on the current machine and then perform
+  // the actual query to get information (name + version) about each extension.
+  //
+  // May return following kind of return codes:
+  //   VK_SUCCESS                       When an instance was created.
+  //   VK_INCOMPLETE                    When the pProperties array is too small.
+  //   VK_ERROR_OUT_OF_HOST_MEMORY      When the host machine is out of memory.
+  //   VK_ERROR_OUT_OF_DEVICE_MEMORY    When the device is out of memory.
+  //   VK_ERROR_LAYER_NOT_PRESENT       If requested layer is not present.
+  //
+  // Some important notes from the Vulkan specs:
+  // 1. If pLayerName is not NULL, playerName must be a null-terminated UTF-8.
+  // 2. pPropertyCount must be a valid uint32_t value.
+  // 3. If pPropertyCount is not 0 then pProperties must be a valid array.
+  // ==========================================================================
+
+  // calculate the amount of possible extensions.
+  uint32_t extensionCount = 0;
+  auto result = vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
+  if (result != VK_SUCCESS) {
+    printf("vkEnumerateInstanceExtensionProperties failed: %s", vulkan_result_description(result).c_str());
+    exit(EXIT_FAILURE);
+  }
+
+  // gather information about the extensions.
+  std::vector<VkExtensionProperties> extensions(extensionCount);
+  result = vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.data());
+  if (result != VK_SUCCESS) {
+    printf("vkEnumerateInstanceExtensionProperties failed: %s", vulkan_result_description(result).c_str());
+    exit(EXIT_FAILURE);
+  }
+
+  // print out the list of supported extensions.
+  printf("Found [%d] supported Vulkan extension(s):\n", extensionCount);
+  for (const auto& extension : extensions) {
+    printf("\t%s\n", extension.extensionName);
+  }
+
   // ==========================================================================
   // VkApplicationInfo - Structure specifying application information.
   // This is optional, but can be useful when debugging.
@@ -112,9 +158,9 @@ static void init_vulkan()
   // 2. pAllocator must be NULL or a pointer to VkAllocationCallbacks.
   // 3. pInstance must be a pointer to a VkInstance handle.
   // ==========================================================================
-  VkResult result = vkCreateInstance(&instanceInfo, NULL, &sInstance);
-  printf("vkCreateInstance: %s\n", vulkan_result_description(result).c_str());
+  result = vkCreateInstance(&instanceInfo, NULL, &sInstance);
   if (result != VK_SUCCESS) {
+    printf("vkCreateInstance failed: %s\n", vulkan_result_description(result).c_str());
     exit(EXIT_FAILURE);
   }
 }
