@@ -1,3 +1,4 @@
+#include <cassert>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -22,7 +23,9 @@ const std::vector<const char*> EXTENSIONS = {
 // ============================================================================
 
 // The main handle which is used to store all per-application state values.
-static VkInstance sInstance = NULL;
+static VkInstance sInstance = VK_NULL_HANDLE;
+// A handle that points to the selected physical graphics card.
+static VkPhysicalDevice sPhysicalDevice = VK_NULL_HANDLE;
 
 // ============================================================================
 // Get the result description for the specified Vulkan result code.
@@ -51,6 +54,62 @@ static std::string vulkan_result_description(VkResult result)
     default:
       return "An unknown result code [" + std::to_string(result) + "] occured.";
   }
+}
+
+// ============================================================================
+// PHYSICAL DEVICES
+// ============================================================================
+// Vulkan seperates devices into physical and logical devices.
+//
+// Physical device represents a single complete implementation of Vulkan that
+// is available for the host machine.
+// ============================================================================
+static void select_vulkan_physical_device()
+{
+  assert(sInstance != VK_NULL_HANDLE);
+  printf("Selecting a physical device for Vulkan.\n");
+
+  // get the amount of physical device candidates.
+  uint32_t deviceCount = 0;
+  VkResult result = vkEnumeratePhysicalDevices(sInstance, &deviceCount, NULL);
+  if (result != VK_SUCCESS) {
+    printf("vkEnumeratePhysicalDevices failed: %s", vulkan_result_description(result).c_str());
+    exit(EXIT_FAILURE);
+  }
+
+  // get references to details about the devices.
+  std::vector<VkPhysicalDevice> devices(deviceCount);
+  result = vkEnumeratePhysicalDevices(sInstance, &deviceCount, devices.data());
+  if (result != VK_SUCCESS) {
+    printf("vkEnumeratePhysicalDevices failed: %s", vulkan_result_description(result).c_str());
+    exit(EXIT_FAILURE);
+  }
+
+  // query properties, features and queue family of each physical device candidate.
+  printf("Found [%d] physical device candidates:\n", deviceCount);
+  for (const auto& device : devices) {
+    VkPhysicalDeviceProperties deviceProperties;
+    vkGetPhysicalDeviceProperties(device, &deviceProperties);
+    printf("\t%s\n", deviceProperties.deviceName);
+
+    VkPhysicalDeviceFeatures deviceFeatures;
+    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+    printf("\t\tsupports geometry shader: %d\n", deviceFeatures.geometryShader);
+    printf("\t\tsupports tesselation shader: %d\n", deviceFeatures.tessellationShader);
+
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, NULL);
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+    for (const auto& queueFamily : queueFamilies) {
+      printf("\t\tqueue-family:\n");
+      printf("\t\t\tsupports graphics operations: %d\n", ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 ? 1 : 0));
+      printf("\t\t\tsupports compute operations: %d\n", ((queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 ? 1 : 0));
+    }
+  }
+
+  // ... for debugging purposes we just select the first item now ...
+  sPhysicalDevice = devices[0];
 }
 
 // ============================================================================
@@ -237,6 +296,8 @@ static void init_vulkan()
     printf("vkCreateInstance failed: %s\n", vulkan_result_description(result).c_str());
     exit(EXIT_FAILURE);
   }
+
+  select_vulkan_physical_device();
 }
 
 // ============================================================================
