@@ -5,8 +5,12 @@
 
 #include <vulkan/vulkan.h>
 
-const std::vector<const char*> validationLayers = {
+const std::vector<const char*> VALIDATION_LAYERS = {
   "VK_LAYER_LUNARG_standard_validation"
+};
+
+const std::vector<const char*> EXTENSIONS = {
+  VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 };
 
 #ifdef NDEBUG
@@ -189,18 +193,24 @@ static void init_vulkan()
   instanceInfo.flags = 0;
   instanceInfo.pApplicationInfo = &applicationInfo;
   if (enableValidationLayers) {
-    instanceInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-    instanceInfo.ppEnabledLayerNames = validationLayers.data();
+    instanceInfo.enabledLayerCount = static_cast<uint32_t>(VALIDATION_LAYERS.size());
+    instanceInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
+    instanceInfo.enabledExtensionCount = static_cast<uint32_t>(EXTENSIONS.size());
+    instanceInfo.ppEnabledExtensionNames = EXTENSIONS.data();
     printf("Enabled [%d] validation layers:\n", instanceInfo.enabledLayerCount);
-    for (const auto& validationLayer : validationLayers) {
+    for (const auto& validationLayer : VALIDATION_LAYERS) {
       printf("\t%s\n", validationLayer);
+    }
+    printf("Enabled [%d] extensions:\n", instanceInfo.enabledExtensionCount);
+    for (const auto& extension : EXTENSIONS) {
+      printf("\t%s\n", extension);
     }
   } else {
     instanceInfo.enabledLayerCount = 0;
     instanceInfo.ppEnabledLayerNames = NULL;
+    instanceInfo.enabledExtensionCount = 0;
+    instanceInfo.ppEnabledExtensionNames = NULL;
   }
-  instanceInfo.enabledExtensionCount = 0;
-  instanceInfo.ppEnabledExtensionNames = NULL;
 
   // ==========================================================================
   // vkCreateInstance - Create a new Vulkan instance.
