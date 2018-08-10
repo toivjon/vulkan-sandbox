@@ -5,6 +5,16 @@
 
 #include <vulkan/vulkan.h>
 
+const std::vector<const char*> validationLayers = {
+  "VK_LAYER_LUNARG_standard_validation"
+};
+
+#ifdef NDEBUG
+  const bool enabledValidationLayers = false;
+#else
+  const bool enableValidationLayers = true;
+#endif
+
 // ============================================================================
 
 // The main handle which is used to store all per-application state values.
@@ -44,6 +54,51 @@ static std::string vulkan_result_description(VkResult result)
 static void init_vulkan()
 {
   // ==========================================================================
+  // VALIDATION LAYERS
+  // ==========================================================================
+  // vkEnumerateInstanceLayerProperties - Enumerate Vulkan layers.
+  // This is optional, but can be useful to check available layers.
+  //
+  // This feature is actually divided into two sections, where we must first
+  // calculate the amount of available layers and the perform the actual query
+  // to get information (name, description + version) about each layer.
+  //
+  // May return following kind of return codes:
+  //  VK_SUCCESS
+  //  VK_INCOMPLETE
+  //  VK_ERROR_OUT_OF_HOST_MEMORY
+  //  VK_ERROR_OUT_OF_DEVICE_MEMORY
+  //
+  // Some important notes from the Vulkan specs:
+  // 1. pPropertyCount must be a valid uint32_t value.
+  // 2. If pPropertyCount is not 0 then pProperties must be a valid array.
+  // ==========================================================================
+
+  // calculate the amount of available validation layers.
+  uint32_t layerCount = 0;
+  auto result = vkEnumerateInstanceLayerProperties(&layerCount, NULL);
+  if (result != VK_SUCCESS) {
+    printf("vkEnumerateInstanceLayerProperties failed: %s", vulkan_result_description(result).c_str());
+    exit(EXIT_FAILURE);
+  }
+
+  // gather information about the extensions.
+  std::vector<VkLayerProperties> layers(layerCount);
+  result = vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
+  if (result != VK_SUCCESS) {
+    printf("vkEnumerateInstanceLayerProperties failed: %s", vulkan_result_description(result).c_str());
+    exit(EXIT_FAILURE);
+  }
+
+  // print out the list of supported extensions.
+  printf("Found [%d] supported Vulkan layers(s):\n", layerCount);
+  for (const auto& layer : layers) {
+    printf("\t%s\n", layer.layerName);
+  }
+
+  // ==========================================================================
+  // EXTENSIONS
+  // ==========================================================================
   // vkEnumerateInstanceExtensionProperties - Enumerate Vulkan extensions.
   // This is optional, but can be useful to detect available extensions.
   //
@@ -66,7 +121,7 @@ static void init_vulkan()
 
   // calculate the amount of possible extensions.
   uint32_t extensionCount = 0;
-  auto result = vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
+  result = vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL);
   if (result != VK_SUCCESS) {
     printf("vkEnumerateInstanceExtensionProperties failed: %s", vulkan_result_description(result).c_str());
     exit(EXIT_FAILURE);
@@ -133,8 +188,17 @@ static void init_vulkan()
   instanceInfo.pNext = NULL;
   instanceInfo.flags = 0;
   instanceInfo.pApplicationInfo = &applicationInfo;
-  instanceInfo.enabledLayerCount = 0;
-  instanceInfo.ppEnabledLayerNames = NULL;
+  if (enableValidationLayers) {
+    instanceInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+    instanceInfo.ppEnabledLayerNames = validationLayers.data();
+    printf("Enabled [%d] validation layers:\n", instanceInfo.enabledLayerCount);
+    for (const auto& validationLayer : validationLayers) {
+      printf("\t%s\n", validationLayer);
+    }
+  } else {
+    instanceInfo.enabledLayerCount = 0;
+    instanceInfo.ppEnabledLayerNames = NULL;
+  }
   instanceInfo.enabledExtensionCount = 0;
   instanceInfo.ppEnabledExtensionNames = NULL;
 
