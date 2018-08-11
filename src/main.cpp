@@ -26,6 +26,8 @@ const std::vector<const char*> EXTENSIONS = {
 static VkInstance sInstance = VK_NULL_HANDLE;
 // A handle that points to the selected physical graphics card.
 static VkPhysicalDevice sPhysicalDevice = VK_NULL_HANDLE;
+// The index of the selected physical device queue family.
+static int sQueueFamilyIndex = 0;
 
 // ============================================================================
 // Get the result description for the specified Vulkan result code.
@@ -63,21 +65,35 @@ static std::string vulkan_result_description(VkResult result)
 //
 // Physical device represents a single complete implementation of Vulkan that
 // is available for the host machine.
+//
+// Vulkan requires us to first enumerate and then select a suitable physical
+// device for our application. For this purpose, we should do following things.
+//
+//   1. Enumerate available physical devices.
+//   2. Check and rate devices based on their support to required properties.
+//   3. Check and rate devices based on their support to required features.
+//
+// In addition to previously mentioned device support checks, we also need to
+// check which queue family we can use in our processing. This is done by first
+// enumerating all device queue families and then finding the index of a queue
+// which supports our required set of features (e.g. graphics handling etc.).
+//
+// NOTE: Now we use a simple device selection, which does not score devices!
+//
+// @returns The index of the selected physical device.
 // ============================================================================
-static void select_vulkan_physical_device()
-{
-  assert(sInstance != VK_NULL_HANDLE);
-  printf("Selecting a physical device for Vulkan.\n");
 
-  // get the amount of physical device candidates.
+static std::vector<VkPhysicalDevice> enumerate_physical_devices()
+{
+  // calculate how many devices the host machine contains.
   uint32_t deviceCount = 0;
-  VkResult result = vkEnumeratePhysicalDevices(sInstance, &deviceCount, NULL);
+  auto result = vkEnumeratePhysicalDevices(sInstance, &deviceCount, NULL);
   if (result != VK_SUCCESS) {
     printf("vkEnumeratePhysicalDevices failed: %s", vulkan_result_description(result).c_str());
     exit(EXIT_FAILURE);
   }
 
-  // get references to details about the devices.
+  // get handles for each available device.
   std::vector<VkPhysicalDevice> devices(deviceCount);
   result = vkEnumeratePhysicalDevices(sInstance, &deviceCount, devices.data());
   if (result != VK_SUCCESS) {
@@ -85,31 +101,65 @@ static void select_vulkan_physical_device()
     exit(EXIT_FAILURE);
   }
 
-  // query properties, features and queue family of each physical device candidate.
-  printf("Found [%d] physical device candidates:\n", deviceCount);
+  // return the results back to caller.
+  printf("Vulkan API found [%d] physical device(s).\n", deviceCount);
+  return devices;
+}
+
+// ============================================================================
+
+static std::vector<VkQueueFamilyProperties> enumerate_queue_family_properties(const VkPhysicalDevice& device)
+{
+  // calculate how many queue families the physical device supports.
+  uint32_t queueFamilyCount = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, NULL);
+
+  // get handles for each available queue family.
+  std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+  vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+  // return the results back to caller.
+  printf("Vulkan API found [%d] queue families for the target physical device.\n", queueFamilyCount);
+  return queueFamilies;
+}
+
+// ============================================================================
+
+static void select_vulkan_physical_device_and_queue_family()
+{
+  assert(sInstance != VK_NULL_HANDLE);
+  printf("Selecting a physical device for Vulkan.\n");
+
+  // iterate over the list of available physical devices.
+  auto devices = enumerate_physical_devices();
   for (const auto& device : devices) {
-    VkPhysicalDeviceProperties deviceProperties;
-    vkGetPhysicalDeviceProperties(device, &deviceProperties);
-    printf("\t%s\n", deviceProperties.deviceName);
+    // get a support information from the device.
+    VkPhysicalDeviceFeatures features;
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceFeatures(device, &features);
+    vkGetPhysicalDeviceProperties(device, &properties);
 
-    VkPhysicalDeviceFeatures deviceFeatures;
-    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-    printf("\t\tsupports geometry shader: %d\n", deviceFeatures.geometryShader);
-    printf("\t\tsupports tesselation shader: %d\n", deviceFeatures.tessellationShader);
+    // print out some support information.
+    printf("\t%s\n", properties.deviceName);
+    printf("\t\tsupports geometry shader:\t%d\n", features.geometryShader);
+    printf("\t\tsupports tesselation shader:\t%d\n", features.tessellationShader);
 
-    uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, NULL);
-    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
-    for (const auto& queueFamily : queueFamilies) {
-      printf("\t\tqueue-family:\n");
-      printf("\t\t\tsupports graphics operations: %d\n", ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 ? 1 : 0));
-      printf("\t\t\tsupports compute operations: %d\n", ((queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 ? 1 : 0));
+    // check that the device has a queue family containing a support for graphics.
+    auto queueFamilies = enumerate_queue_family_properties(device);
+    for (auto i = 0u; i < queueFamilies.size(); i++) {
+      // print out some queue family information.
+      printf("\tqueue-family: %d\n", i);
+      printf("\t\tsupports graphics:\t%d\n", (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 ? 1 : 0);
+      printf("\t\tsupports compute:\t%d\n", (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 ? 1 : 0);
+
+      // check whether we've found our device.
+      bool supportsGraphics = (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
+      if (features.geometryShader && features.tessellationShader && supportsGraphics) {
+        sPhysicalDevice = device;
+        sQueueFamilyIndex = i;
+      }
     }
   }
-
-  // ... for debugging purposes we just select the first item now ...
-  sPhysicalDevice = devices[0];
 }
 
 // ============================================================================
@@ -297,7 +347,8 @@ static void init_vulkan()
     exit(EXIT_FAILURE);
   }
 
-  select_vulkan_physical_device();
+  select_vulkan_physical_device_and_queue_family();
+
 }
 
 // ============================================================================
