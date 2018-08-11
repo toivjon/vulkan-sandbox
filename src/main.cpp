@@ -79,8 +79,6 @@ static std::string vulkan_result_description(VkResult result)
 // which supports our required set of features (e.g. graphics handling etc.).
 //
 // NOTE: Now we use a simple device selection, which does not score devices!
-//
-// @returns The index of the selected physical device.
 // ============================================================================
 
 static std::vector<VkPhysicalDevice> enumerate_physical_devices()
