@@ -28,6 +28,8 @@ static VkInstance sInstance = VK_NULL_HANDLE;
 static VkPhysicalDevice sPhysicalDevice = VK_NULL_HANDLE;
 // The index of the selected physical device queue family.
 static int sQueueFamilyIndex = 0;
+// A handle that points to the created logical device.
+static VkDevice sLogicalDevice = VK_NULL_HANDLE;
 
 // ============================================================================
 // Get the result description for the specified Vulkan result code.
@@ -158,6 +160,62 @@ static void select_vulkan_physical_device_and_queue_family()
       }
     }
   }
+}
+
+// ============================================================================
+// LOGICAL DEVICES
+// ============================================================================
+// Vulkan seperates devices into physical and logical devices.
+//
+// Logical device is used as an application specific interface for the physical
+// interface, which is used to store application specific definitions in Vulkan.
+//
+// Same physical device can be used to create multiple logical devices. In our
+// testing environment example, we now only create a single logical device.
+// ============================================================================
+
+static void create_logical_device()
+{
+  assert(sInstance != VK_NULL_HANDLE);
+  assert(sPhysicalDevice != VK_NULL_HANDLE);
+
+  // create a descriptor for the queues to be created for the device.
+  float queuePriority = 1.f;
+  VkDeviceQueueCreateInfo queueCreateInfo = {};
+  queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+  queueCreateInfo.pNext = NULL;
+  queueCreateInfo.flags = 0;
+  queueCreateInfo.queueFamilyIndex = sQueueFamilyIndex;
+  queueCreateInfo.queueCount = 1;
+  queueCreateInfo.pQueuePriorities = &queuePriority;
+
+  // specify a structure of which device features we will use.
+  VkPhysicalDeviceFeatures deviceFeatures = {};
+
+  // create a descriptor for a new logical device.
+  VkDeviceCreateInfo createInfo;
+  createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+  createInfo.pNext = NULL;
+  createInfo.flags = 0;
+  createInfo.pQueueCreateInfos = &queueCreateInfo;
+  createInfo.queueCreateInfoCount = 1;
+  createInfo.pEnabledFeatures = &deviceFeatures;
+  createInfo.enabledExtensionCount = 0;
+  if (enableValidationLayers) {
+    createInfo.enabledLayerCount = static_cast<uint32_t>(VALIDATION_LAYERS.size());
+    createInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
+  } else {
+    createInfo.enabledLayerCount = 0;
+    createInfo.ppEnabledLayerNames = NULL;
+  }
+
+  // try to create the logical device with the descriptor.
+  auto result = vkCreateDevice(sPhysicalDevice, &createInfo, nullptr, &sLogicalDevice);
+  if (result != VK_SUCCESS) {
+    printf("vkCreateDevice failed: %s", vulkan_result_description(result).c_str());
+    exit(EXIT_FAILURE);
+  }
+  printf("Created a new Vulkan logical device for the application.\n");
 }
 
 // ============================================================================
@@ -346,7 +404,7 @@ static void init_vulkan()
   }
 
   select_vulkan_physical_device_and_queue_family();
-
+  create_logical_device();
 }
 
 // ============================================================================
@@ -361,6 +419,7 @@ static void init()
 static void shutdown()
 {
   if (sInstance != NULL) {
+    vkDestroyDevice(sLogicalDevice, NULL);
     vkDestroyInstance(sInstance, NULL);
     printf("vkDestroyInstance succeeded.");
   }
