@@ -1,3 +1,15 @@
+// ============================================================================
+// Notes about using Vulkan
+//
+// A generic initialization procedure for Vulkan follows the following steps.
+//
+// 1. Create a Vulkan instance.
+// 2. Create a rendering surface.
+// 3. Select a physical device and find suitable queue families.
+// 4. Create a logical device.
+// ... TODO more to be added ...
+//
+// ============================================================================
 #define WIN32_LEAN_AND_MEAN
 #define VK_USE_PLATFORM_WIN32_KHR
 
@@ -39,8 +51,10 @@ static HWND sHWND = nullptr;
 static VkInstance sInstance = VK_NULL_HANDLE;
 // A handle that points to the selected physical graphics card.
 static VkPhysicalDevice sPhysicalDevice = VK_NULL_HANDLE;
-// The index of the selected physical device queue family.
-static int sQueueFamilyIndex = 0;
+// The index of the selected physical device queue family for graphics.
+static int sGraphicsQueueFamilyIndex = 0;
+// The index of the selected physical device queue family for presentation.
+static int sPresentQueueFamilyIndex = 0;
 // A handle that points to the created logical device.
 static VkDevice sLogicalDevice = VK_NULL_HANDLE;
 // A handle to created window surface.
@@ -171,7 +185,14 @@ static void select_vulkan_physical_device_and_queue_family()
       bool supportsGraphics = (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
       if (features.geometryShader && features.tessellationShader && supportsGraphics) {
         sPhysicalDevice = device;
-        sQueueFamilyIndex = i;
+        sGraphicsQueueFamilyIndex = i;
+      }
+
+      VkBool32 presentSupport = false;
+      vkGetPhysicalDeviceSurfaceSupportKHR(sPhysicalDevice, i, sSurface, &presentSupport);
+      printf("\t\tsupports present:\t%d\n", presentSupport ? 1 : 0);
+      if (presentSupport) {
+        sPresentQueueFamilyIndex = i;
       }
     }
   }
@@ -200,7 +221,7 @@ static void create_logical_device()
   queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
   queueCreateInfo.pNext = NULL;
   queueCreateInfo.flags = 0;
-  queueCreateInfo.queueFamilyIndex = sQueueFamilyIndex;
+  queueCreateInfo.queueFamilyIndex = sGraphicsQueueFamilyIndex;
   queueCreateInfo.queueCount = 1;
   queueCreateInfo.pQueuePriorities = &queuePriority;
 
@@ -449,9 +470,9 @@ static void init_vulkan()
     exit(EXIT_FAILURE);
   }
 
+  create_window_surface();
   select_vulkan_physical_device_and_queue_family();
   create_logical_device();
-  create_window_surface();
 }
 
 // ============================================================================
