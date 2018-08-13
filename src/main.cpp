@@ -7,6 +7,7 @@
 // 2. Create a rendering surface.
 // 3. Select a physical device and find suitable queue families.
 // 4. Create a logical device.
+// 5. Create queues.
 // ... TODO more to be added ...
 //
 // ============================================================================
@@ -14,6 +15,7 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 
 #include <cassert>
+#include <set>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -59,6 +61,8 @@ static int sPresentQueueFamilyIndex = 0;
 static VkDevice sLogicalDevice = VK_NULL_HANDLE;
 // A handle to created window surface.
 static VkSurfaceKHR sSurface = VK_NULL_HANDLE;
+// A handle to presentation queue.
+static VkQueue sPresentQueue = VK_NULL_HANDLE;
 
 // ============================================================================
 // Get the result description for the specified Vulkan result code.
@@ -215,15 +219,21 @@ static void create_logical_device()
   assert(sInstance != VK_NULL_HANDLE);
   assert(sPhysicalDevice != VK_NULL_HANDLE);
 
+
   // create a descriptor for the queues to be created for the device.
   float queuePriority = 1.f;
-  VkDeviceQueueCreateInfo queueCreateInfo = {};
-  queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  queueCreateInfo.pNext = NULL;
-  queueCreateInfo.flags = 0;
-  queueCreateInfo.queueFamilyIndex = sGraphicsQueueFamilyIndex;
-  queueCreateInfo.queueCount = 1;
-  queueCreateInfo.pQueuePriorities = &queuePriority;
+  std::set<int> queueFamilies = { sGraphicsQueueFamilyIndex, sPresentQueueFamilyIndex };
+  std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+  for (int queueFamily : queueFamilies) {
+    VkDeviceQueueCreateInfo queueCreateInfo = {};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.pNext = NULL;
+    queueCreateInfo.flags = 0;
+    queueCreateInfo.queueFamilyIndex = queueFamily;
+    queueCreateInfo.queueCount = 1;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+    queueCreateInfos.push_back(queueCreateInfo);
+  }
 
   // specify a structure of which device features we will use.
   VkPhysicalDeviceFeatures deviceFeatures = {};
@@ -233,8 +243,8 @@ static void create_logical_device()
   createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   createInfo.pNext = NULL;
   createInfo.flags = 0;
-  createInfo.pQueueCreateInfos = &queueCreateInfo;
-  createInfo.queueCreateInfoCount = 1;
+  createInfo.pQueueCreateInfos = queueCreateInfos.data();
+  createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
   createInfo.pEnabledFeatures = &deviceFeatures;
   createInfo.enabledExtensionCount = 0;
   if (enableValidationLayers) {
@@ -251,6 +261,10 @@ static void create_logical_device()
     printf("vkCreateDevice failed: %s", vulkan_result_description(result).c_str());
     exit(EXIT_FAILURE);
   }
+
+  // get the handle to the presentation queue.
+  vkGetDeviceQueue(sLogicalDevice, sPresentQueueFamilyIndex, 0, &sPresentQueue);
+
   printf("Created a new Vulkan logical device for the application.\n");
 }
 
@@ -283,7 +297,6 @@ static void create_window_surface()
   }
   printf("Create a new window surface for the application.\n");
 }
-
 
 // ============================================================================
 
