@@ -1,9 +1,15 @@
+#define WIN32_LEAN_AND_MEAN
+#define VK_USE_PLATFORM_WIN32_KHR
+
 #include <cassert>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
 #include <vector>
 
+#include <windows.h>
+
+// TODO we actually should use vulkan.hpp instead?
 #include <vulkan/vulkan.h>
 
 const std::vector<const char*> VALIDATION_LAYERS = {
@@ -11,7 +17,9 @@ const std::vector<const char*> VALIDATION_LAYERS = {
 };
 
 const std::vector<const char*> EXTENSIONS = {
-  VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+  VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+  "VK_KHR_surface",
+  "VK_KHR_win32_surface"
 };
 
 #ifdef NDEBUG
@@ -20,7 +28,12 @@ const std::vector<const char*> EXTENSIONS = {
   const bool enableValidationLayers = true;
 #endif
 
+#define WINDOW_CLASS "window-class"
+
 // ============================================================================
+
+// The handle for the main window of the application.
+static HWND sHWND = nullptr;
 
 // The main handle which is used to store all per-application state values.
 static VkInstance sInstance = VK_NULL_HANDLE;
@@ -30,6 +43,8 @@ static VkPhysicalDevice sPhysicalDevice = VK_NULL_HANDLE;
 static int sQueueFamilyIndex = 0;
 // A handle that points to the created logical device.
 static VkDevice sLogicalDevice = VK_NULL_HANDLE;
+// A handle to created window surface.
+static VkSurfaceKHR sSurface = VK_NULL_HANDLE;
 
 // ============================================================================
 // Get the result description for the specified Vulkan result code.
@@ -219,6 +234,37 @@ static void create_logical_device()
 }
 
 // ============================================================================
+// WINDOW SURFACES
+// ============================================================================
+//
+// ============================================================================
+
+static void create_window_surface()
+{
+  // create a descriptor to create a Vulkan window surface.
+  VkWin32SurfaceCreateInfoKHR createInfo = {};
+  createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+  createInfo.hwnd = sHWND;
+  createInfo.hinstance = GetModuleHandle(nullptr);
+
+  // explicitly load the necessary surface creation function.
+  auto function = (PFN_vkCreateWin32SurfaceKHR) vkGetInstanceProcAddr(sInstance, "vkCreateWin32SurfaceKHR");
+  if (!function) {
+    printf("vkGetInstanceProc failed: unable to find vkCreateWin32SurfaceKHR.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // try to create a new window surface.
+  auto result = function(sInstance, &createInfo, nullptr, &sSurface);
+  if (result != VK_SUCCESS) {
+    printf("vkCreateWin32SurfaceKHR failed: %s\n", vulkan_result_description(result).c_str());
+    exit(EXIT_FAILURE);
+  }
+  printf("Create a new window surface for the application.\n");
+}
+
+
+// ============================================================================
 
 static void init_vulkan()
 {
@@ -405,13 +451,7 @@ static void init_vulkan()
 
   select_vulkan_physical_device_and_queue_family();
   create_logical_device();
-}
-
-// ============================================================================
-
-static void init()
-{
-  init_vulkan();
+  create_window_surface();
 }
 
 // ============================================================================
@@ -420,16 +460,123 @@ static void shutdown()
 {
   if (sInstance != NULL) {
     vkDestroyDevice(sLogicalDevice, NULL);
+    vkDestroySurfaceKHR(sInstance, sSurface, NULL);
     vkDestroyInstance(sInstance, NULL);
     printf("vkDestroyInstance succeeded.");
   }
 }
 
 // ============================================================================
+// WINAPI - Window process callback.
+// ============================================================================
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  switch (msg)
+  {
+    case WM_CLOSE:
+      DestroyWindow(sHWND);
+      break;
+    case WM_DESTROY:
+      PostQuitMessage(0);
+      break;
+  }
+  return DefWindowProc(hwnd, msg, wParam, lParam);
+}
 
-int main()
+// ============================================================================
+// WINAPI - Unregister the application's window class.
+// ============================================================================
+static void unregister_window_class()
+{
+  UnregisterClass("window-class", GetModuleHandle(nullptr));
+}
+
+// ============================================================================
+// WINAPI - Register a window class for the application.
+// ============================================================================
+static void register_window_class()
+{
+  // construct a descriptor a window class for our application.
+  WNDCLASSEX wc;
+  ZeroMemory(&wc, sizeof(WNDCLASSEX));
+  wc.cbSize         = sizeof(WNDCLASSEX);
+  wc.lpfnWndProc    = WndProc;
+  wc.hInstance      = GetModuleHandle(nullptr);
+  wc.hIcon          = LoadIcon(NULL, IDI_APPLICATION);
+  wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
+  wc.hbrBackground  = (HBRUSH)(COLOR_WINDOW + 1);
+  wc.lpszClassName  = WINDOW_CLASS;
+  wc.hIconSm        = LoadIcon(NULL, IDI_APPLICATION);
+
+  // try to register the new class.
+  if (RegisterClassEx(&wc) == 0) {
+    printf("RegisterClassEx: %ld\n", GetLastError());
+    exit(-1);
+  }
+  atexit(unregister_window_class);
+}
+
+// ============================================================================
+// WINAPI - Destruct the application's window.
+// ============================================================================
+static void destroy_window()
+{
+  DestroyWindow(sHWND);
+}
+
+// ============================================================================
+// WINAPI - Create a window for the application.
+// ============================================================================
+static void create_window()
+{
+  // create a new window for our application.
+  sHWND = CreateWindowEx(
+    WS_EX_CLIENTEDGE,
+    "window-class",
+    "Winapi - Sandbox",
+    WS_OVERLAPPEDWINDOW,
+    CW_USEDEFAULT, CW_USEDEFAULT,
+    800, 600,
+    NULL, NULL, GetModuleHandle(nullptr), NULL);
+  if (sHWND == nullptr) {
+    printf("CreateWindowEx: %ld\n", GetLastError());
+    exit(EXIT_FAILURE);
+  }
+  atexit(destroy_window);
+}
+
+// ============================================================================
+
+static void init_window()
+{
+  register_window_class();
+  create_window();
+}
+
+// ============================================================================
+
+static void init()
+{
+  init_window();
+  init_vulkan();
+}
+
+// ============================================================================
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
   atexit(shutdown);
   init();
+
+  MSG msg;
+  ShowWindow(sHWND, nCmdShow);
+  UpdateWindow(sHWND);
+  while (GetMessage(&msg, NULL, 0, 0) > 0) {
+    TranslateMessage(&msg);
+    DispatchMessage(&msg);
+  }
+
+  printf("%d %d %s %d\n", hInstance->unused, hPrevInstance->unused, lpCmdLine, nCmdShow);
+
   return 0;
 }
