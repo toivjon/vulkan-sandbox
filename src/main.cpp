@@ -6,8 +6,8 @@
 // 1. Create a Vulkan instance.
 // 2. Create a rendering surface.
 // 3. Select a physical device and find suitable queue families.
-// 4. Create a logical device.
-// 5. Create queues.
+// 4. Create a logical device & queues.
+// 5.
 // ... TODO more to be added ...
 //
 // ============================================================================
@@ -34,6 +34,10 @@ const std::vector<const char*> EXTENSIONS = {
   VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
   "VK_KHR_surface",
   "VK_KHR_win32_surface"
+};
+
+const std::vector<const char*> DEVICE_EXTENSIONS = {
+  VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
 #ifdef NDEBUG
@@ -158,6 +162,23 @@ static std::vector<VkQueueFamilyProperties> enumerate_queue_family_properties(co
 
 // ============================================================================
 
+static std::vector<VkExtensionProperties> enumerate_available_extensions(const VkPhysicalDevice& device)
+{
+  // calculate how many extensions the physical device supports.
+  uint32_t extensionCount = 0;
+  vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, NULL);
+
+  // get handles for each available extension.
+  std::vector<VkExtensionProperties> extensions(extensionCount);
+  vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, extensions.data());
+
+  // return the results back to caller.
+  printf("Vulkan API found [%d] device extension(s).\n", extensionCount);
+  return extensions;
+}
+
+// ============================================================================
+
 static void select_vulkan_physical_device_and_queue_family()
 {
   assert(sInstance != VK_NULL_HANDLE);
@@ -177,6 +198,16 @@ static void select_vulkan_physical_device_and_queue_family()
     printf("\t\tsupports geometry shader:\t%d\n", features.geometryShader);
     printf("\t\tsupports tesselation shader:\t%d\n", features.tessellationShader);
 
+    std::set<std::string> requiredExtensions(DEVICE_EXTENSIONS.begin(), DEVICE_EXTENSIONS.end());
+    auto deviceExtensions = enumerate_available_extensions(device);
+    printf("\tdevice-extensions:\n");
+    for (const auto& deviceExtension : deviceExtensions) {
+      printf("\t\t%s\n", deviceExtension.extensionName);
+      requiredExtensions.erase(deviceExtension.extensionName);
+    }
+    bool hasRequiredDeviceExtensions = requiredExtensions.empty();
+    printf("\tdevice has required extensions: %d\n", hasRequiredDeviceExtensions ? 1 : 0);
+
     // check that the device has a queue family containing a support for graphics.
     auto queueFamilies = enumerate_queue_family_properties(device);
     for (auto i = 0u; i < queueFamilies.size(); i++) {
@@ -187,7 +218,7 @@ static void select_vulkan_physical_device_and_queue_family()
 
       // check whether we've found our device.
       bool supportsGraphics = (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
-      if (features.geometryShader && features.tessellationShader && supportsGraphics) {
+      if (features.geometryShader && features.tessellationShader && supportsGraphics && hasRequiredDeviceExtensions) {
         sPhysicalDevice = device;
         sGraphicsQueueFamilyIndex = i;
       }
@@ -246,7 +277,8 @@ static void create_logical_device()
   createInfo.pQueueCreateInfos = queueCreateInfos.data();
   createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
   createInfo.pEnabledFeatures = &deviceFeatures;
-  createInfo.enabledExtensionCount = 0;
+  createInfo.enabledExtensionCount = DEVICE_EXTENSIONS.size();
+  createInfo.ppEnabledExtensionNames = DEVICE_EXTENSIONS.data();
   if (enableValidationLayers) {
     createInfo.enabledLayerCount = static_cast<uint32_t>(VALIDATION_LAYERS.size());
     createInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
